@@ -1,0 +1,10 @@
+
+langgraph
+pydantic
+langchain-core
+langchain-openrouter
+langchain-mcp-adapters
+python-dotenv
+openai
+requests
+aiohttp
