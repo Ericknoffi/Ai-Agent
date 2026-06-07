@@ -1,7 +1,5 @@
 from typing import TypedDict, List, Literal
 from langchain_core.messages import BaseMessage
-from pydantic import BaseModel
-
 
 
 class Task(TypedDict):

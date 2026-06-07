@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 from langchain_core.messages import SystemMessage,HumanMessage
-from Agent.Gateway.models import ModelRole
+from Gateway.models import ModelRole
 from .supervisor_node import AgentState
-from Agent.config import FINALIZER_PROMPT
+from config import FINALIZER_PROMPT
 
 class FinalResponse(BaseModel):
     answer: str

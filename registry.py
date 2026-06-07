@@ -1,7 +1,7 @@
-from Agent.Tools.Filesystem import get_filesystem_tools
-from Agent.Tools.Github import get_github_tools
-from Agent.Tools.Web import get_fetch_tools
-from Agent.Tools.Documentation import get_context7_tools
+from Tools.Filesystem import get_filesystem_tools
+from Tools.Github import get_github_tools
+from Tools.Web import get_fetch_tools
+from Tools.Documentation import get_context7_tools
 
 RESEARCH_TOOLS = []
 CODING_TOOLS = []

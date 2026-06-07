@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 from typing import Literal
 from langchain_core.messages import SystemMessage,HumanMessage
-from Agent.Gateway.models import ModelRole
-from Agent.config import PLANNER_PROMPT
+from Gateway.models import ModelRole
+from config import PLANNER_PROMPT
 from .supervisor_node import AgentState
 
 
