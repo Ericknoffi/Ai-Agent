@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from config import CODER_PROMPT
 from Gateway.models import ModelRole
-from Gateway.llm_gateway import LLMGateway
 from .supervisor_node import AgentState
 from langchain_core.messages import SystemMessage,HumanMessage
 
