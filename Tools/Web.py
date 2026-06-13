@@ -1,21 +1,15 @@
-# tools/fetch_mcp.py
-
+import sys
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
-async def get_fetch_tools():
-
-    client = MultiServerMCPClient(
+def create_fetch_client() -> MultiServerMCPClient:
+    return MultiServerMCPClient(
         {
             "fetch": {
-                "command": "npx",
-                "args": [
-                    "-y",
-                    "@modelcontextprotocol/server-fetch"
-                ],
-                "transport": "stdio"
+                "command": sys.executable,   # always correct venv Python, cross-platform
+                "args": ["-m", "mcp_server_fetch"],
+                "env": {"PYTHONIOENCODING": "utf-8"},
+                "transport": "stdio",
             }
         }
     )
-
-    return await client.get_tools()

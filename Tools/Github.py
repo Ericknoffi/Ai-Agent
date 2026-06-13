@@ -1,28 +1,20 @@
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from dotenv import load_dotenv
 import os
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
-load_dotenv()
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+def create_github_client() -> MultiServerMCPClient | None:
+    # Read at call time so load_dotenv() in main.py always runs first
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return None
 
-async def get_github_tools():
-
-    client = MultiServerMCPClient(
+    return MultiServerMCPClient(
         {
             "github": {
                 "command": "npx",
-                "args": [
-                    "-y",
-                    "@modelcontextprotocol/server-github",
-                ],
-                "env": {
-                    "GITHUB_PERSONAL_ACCESS_TOKEN":
-                        GITHUB_TOKEN
-                },
+                "args": ["-y", "@modelcontextprotocol/server-github"],
+                "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": token},
                 "transport": "stdio",
             }
         }
     )
-
-    return await client.get_tools()

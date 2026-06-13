@@ -1,55 +1,61 @@
-from pydantic import BaseModel
-from langchain_core.messages import SystemMessage,HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from Gateway.models import ModelRole
 from config import RESEARCH_PROMPT
 from .supervisor_node import AgentState
-
-
-class ResearchResult(BaseModel):
-    summary: str
-    findings: list[str]
-    confidence: float
-
-
-def get_current_task(state):
-
-    task_id = state["current_task"]
-
-    for task in state["tasks"]:
-        if task["id"] == task_id:
-            return task
-    raise ValueError(
-        f"Task with id {task_id} not found in state."
-    )
+from ._utils import get_current_task, build_updated_tasks, get_prior_results
 
 
 async def researcher(state: AgentState):
-
-    researcher_llm = state["llm_gateway"].get_model(ModelRole.RESEARCHER)
-    
     task = get_current_task(state)
 
-    llm_response = await(
-        researcher_llm.with_structured_output(ResearchResult).ainvoke(
-            [
-                SystemMessage(
-                    content=RESEARCH_PROMPT
-                ),
-                HumanMessage(
-                    content=task["description"]
-                )
-            ]
-        )
+    prior = get_prior_results(state)
+    human_content = (
+        f"Original request: {state['user_query']}\n\n"
+        + (f"{prior}\n\n" if prior else "")
+        + f"Your task: {task['description']}"
     )
 
-    updated_task = []
+    try:
+        agent = state["llm_gateway"].get_agent(ModelRole.RESEARCHER)
 
-    for t in state["tasks"]:
+        response = await agent.ainvoke({
+            "messages": [
+                SystemMessage(content=RESEARCH_PROMPT),
+                HumanMessage(content=human_content),
+            ]
+        })
+        messages = response.get("messages", [])
+        last_message = messages[-1] if messages else None
+        result = ""
 
-        if t["id"] == task["id"]:
-            updated_task.append({**t, "status": "completed", "result": llm_response.model_dump()})
-        else:
-            updated_task.append(t)
-    return {
-            "tasks": updated_task
-    }
+        if last_message:
+            content = last_message.content
+
+            if isinstance(content, list):
+                result = " ".join(
+                    block.get("text", "") for block in content
+                    if isinstance(block, dict)
+                ).strip()
+            else:
+                result = (content or "").strip()
+
+          
+            finish_reason = (
+                last_message.response_metadata.get("finish_reason", "")
+                if hasattr(last_message, "response_metadata") else ""
+            )
+            if finish_reason == "length":
+                result += "\n[Note: response was truncated due to token limit]"
+
+        if not result:
+            result = "Researcher returned an empty response."
+
+        return {
+            "tasks": build_updated_tasks(state, task["id"], "completed", result)
+        }
+
+    except Exception as e:
+        return {
+            "tasks": build_updated_tasks(state, task["id"], "failed", None),
+            "errors": state.get("errors", []) + [f"Researcher failed on task {task['id']!r}: {e}"],
+        }
