@@ -32,3 +32,6 @@ htmlcov/
 
 *.pem
 *.key
+
+# Agent workspace directory for filesystem tools
+workspace/

@@ -23,21 +23,25 @@ Agent/
   main.py
   config.py
   registry.py
+  utils.py
   wrapper.py
   Gateway/
     llm_gateway.py
     models.py
+  Middlewares/
+    pii.py
   Nodes/
-    Planner.py
-    Researcher.py
+    _utils.py
     Coder.py
     Finalizer.py
+    Planner.py
+    Researcher.py
     supervisor_node.py
   Tools/
-    Documentation.py
-    Filesystem.py
-    Github.py
-    Web.py
+    documentation.py
+    filesystem.py
+    github.py
+    web.py
 ```
 
 ## Core architecture
@@ -46,6 +50,7 @@ Agent/
 
 This is the entry point. It:
 
+- reconfigures stdout to UTF-8 (prevents encoding crashes on Windows)
 - loads environment variables
 - initializes the MCP tool registry
 - builds the LangGraph state graph
@@ -56,15 +61,22 @@ This is the entry point. It:
 
 This folder contains model selection and configuration.
 
-- `models.py` defines the model roles and the registry of model settings.
-- `llm_gateway.py` creates `ChatOpenRouter` instances for a given role and attaches tools when a role has a configured tool group.
+- `models.py` defines the model roles, configurations (timeout, retries, etc.), and the registry of model settings.
+- `llm_gateway.py` creates `ChatOpenAI` instances for a given role, caching models and agents, and attaching tools when a role has a configured tool group.
+
+### `Middlewares/`
+
+This folder contains node execution helper middlewares.
+
+- `pii.py` contains the regex patterns and utility functions (`redact_pii`) for PII redaction.
 
 ### `Nodes/`
 
 Each node is a focused unit of work.
 
+- `_utils.py` contains helper functions for managing task list updates, retrieving the current task, and fetching prior completed task results.
 - `Planner.py` creates the task list from the user request.
-- `supervisor_node.py` tracks the current task and decides what should run next.
+- `supervisor_node.py` tracks the current task, checks against iteration / retry budgets, and decides what should run next.
 - `Researcher.py` completes research-oriented tasks.
 - `Coder.py` completes implementation-oriented tasks.
 - `Finalizer.py` synthesizes all completed results into the final response.
@@ -73,22 +85,26 @@ Each node is a focused unit of work.
 
 Each file wraps an MCP server and exposes tools to LangChain.
 
-- `Filesystem.py` connects to the filesystem MCP server.
-- `Web.py` connects to the fetch MCP server.
-- `Github.py` connects to the GitHub MCP server using `GITHUB_TOKEN`.
-- `Documentation.py` connects to Context7 for documentation lookup.
+- `filesystem.py` connects to the filesystem MCP server.
+- `web.py` connects to the fetch MCP server.
+- `github.py` connects to the GitHub MCP server using `GITHUB_TOKEN`.
+- `documentation.py` connects to Context7 for documentation lookup.
+
+### `utils.py`
+
+This file contains the helper logging function `log` that outputs timestamped messages to stdout.
 
 ### `wrapper.py`
 
-This file contains the custom PII redaction wrapper used around node execution.
+This file contains `pii_middleware` which wraps node execution to provide logging and redact PII from task results and the final response (by delegating to `Middlewares/pii.py`).
 
 ### `config.py`
 
-This file stores the prompt templates used by the planner, researcher, coder, and finalizer nodes.
+This file stores the prompt templates used by the planner, supervisor, researcher, and coder nodes.
 
 ### `registry.py`
 
-This file initializes and stores the tool sets used by research and coding roles.
+This file initializes, stores, and manages tool sets used by research and coding roles, managing MCP clients.
 
 ## How the workflow runs
 
@@ -117,7 +133,13 @@ Each task is marked as pending and later consumed by the supervisor.
 
 ### Supervision stage
 
-The supervisor node does not call a model. It inspects the current state and selects the next pending task. If there are no pending tasks, or if the iteration limit is reached, the graph ends at the finalizer.
+The supervisor node calls the supervisor model (with structured output schema) to dynamically decide the next action based on the current state of the tasks. The possible actions are:
+- `none`: proceed deterministically by selecting the next pending task.
+- `retry`: reset a task to pending, clear its result, and increment its retry count (up to `MAX_TASK_RETRIES` of 2).
+- `reassign`: reassign a task to a different agent node (`research`, `coding`, or `finalizer`) and reset its status.
+- `stop`: halt execution immediately, forwarding any reasoning or error notes to the finalizer.
+
+If no pending tasks remain, or if the iteration count reaches the limit (`MAX_ITERATIONS` of 25), the supervisor routes execution to the `finalizer`.
 
 ### Research and coding stages
 
@@ -142,20 +164,18 @@ Current roles include:
 - `PLANNER`
 - `SUPERVISOR`
 - `RESEARCHER`
-- `RETRIEVER`
 - `CODING`
 - `FINALIZER`
 
-Not every role is currently used by the graph, but the registry is ready for expansion.
+Each role config (`ModelConfig`) can define:
 
-Each role can define:
-
-- `model`
-- `temperature`
-- `timeout`
-- `max_retries`
-- `fallback_model`
-- `tool_group`
+- `model` (OpenRouter model identifier)
+- `temperature` (default `0.0`)
+- `timeout` (default `60` seconds)
+- `max_retries` (default `3`)
+- `max_tokens` (default `2048`)
+- `tool_group` (associated tools group, e.g., `research` or `coding`)
+- `base_url` (API URL, default OpenRouter)
 
 ## Tool groups
 
@@ -253,15 +273,25 @@ typically becomes:
 
 ## PII handling
 
-The project includes a custom redaction wrapper in `wrapper.py`.
+The project includes a custom redaction middleware in `wrapper.py` that delegates to `Middlewares/pii.py`.
 
-It is intended to sanitize sensitive text before and after node execution. In its current form, it focuses on redacting common patterns such as:
+It is intended to sanitize sensitive text before and after node execution. In its current form, it uses regex patterns to redact:
 
-- API keys
+- Email addresses
+- Indian mobile numbers (phone)
+- Aadhaar card numbers
+- PAN card numbers
+- Passport numbers
+- Driving license numbers
+- IFSC codes
+- Credit/debit card numbers
+- UPI IDs
 - GitHub tokens
-- email addresses
+- OpenAI API keys
+- JSON Web Tokens (JWT)
+- IPv4 and IPv6 addresses
 
-If you extend the project to handle more sensitive inputs, you can expand the redaction rules in one place.
+If you extend the project to handle more sensitive inputs, you can expand the redaction rules in `Middlewares/pii.py`.
 
 ## Extending the project
 

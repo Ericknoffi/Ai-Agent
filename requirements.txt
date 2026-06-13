@@ -2,9 +2,10 @@
 langgraph
 pydantic
 langchain-core
-langchain-openrouter
+langchain-openai
 langchain-mcp-adapters
 python-dotenv
 openai
 requests
 aiohttp
+mcp-server-fetch
