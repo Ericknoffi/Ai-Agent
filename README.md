@@ -1,4 +1,4 @@
-# AI Agent
+# Multi-AI Agent System
 
 A modular multi-agent framework built with LangGraph, LangChain, and MCP tools. The project splits work into a small orchestration flow with specialized nodes for planning, research, code generation, and final response synthesis.
 
